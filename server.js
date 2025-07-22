@@ -5,6 +5,19 @@ const sharp = require('sharp')
 const app = express()
 app.use(express.json())
 
+// Função para buscar URL da imagem original no e621 via API
+async function getImageUrlFromE621(tags, page) {
+  const url = `https://e621.net/posts.json?tags=${encodeURIComponent(tags)}&page=${page}&limit=1`
+  const response = await axios.get(url, {
+    headers: { 'User-Agent': 'SeuNomeAqui - seuemail@example.com' } // Mude para algo seu
+  })
+
+  if (response.data.posts && response.data.posts.length > 0) {
+    return response.data.posts[0].file.url
+  }
+  throw new Error('Nenhuma imagem encontrada para as tags: ' + tags)
+}
+
 // Função que baixa a imagem, redimensiona e retorna pixels RGB em array
 async function getImagePixels(url, width, height) {
   const response = await axios({
@@ -14,14 +27,13 @@ async function getImagePixels(url, width, height) {
 
   const imageBuffer = Buffer.from(response.data, 'binary')
 
-  // redimensiona e extrai pixels RGB (raw buffer)
   const resized = await sharp(imageBuffer)
     .resize(width, height)
     .removeAlpha()
     .raw()
     .toBuffer()
 
-  const pixelsArray = Array.from(resized) // converte Buffer em array para JSON
+  const pixelsArray = Array.from(resized)
 
   return {
     width,
@@ -30,14 +42,13 @@ async function getImagePixels(url, width, height) {
   }
 }
 
-// Endpoint principal que recebe tags e página, retorna pixels de 1 imagem (exemplo fixo)
 app.post('/', async (req, res) => {
   const { tags, page } = req.body
   console.log('Tags:', tags, 'Page:', page)
 
   try {
-    // Exemplo: você implementa aqui a busca real no e621 e pega a URL da imagem
-    const imageUrl = 'https://static1.e621.net/data/sample/fe/33/fe33d7f5c710f67d3934a2ed13e8b64b.jpg' 
+    const imageUrl = await getImageUrlFromE621(tags, page)
+    console.log('Imagem encontrada:', imageUrl)
 
     const pixelData = await getImagePixels(imageUrl, 128, 128)
     res.json({ images: [pixelData] })
@@ -48,4 +59,4 @@ app.post('/', async (req, res) => {
 })
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`))
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`))
