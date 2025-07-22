@@ -18,7 +18,7 @@ async function getImageUrlFromE621(tags, page) {
   throw new Error('Nenhuma imagem encontrada para as tags: ' + tags)
 }
 
-// Função que baixa a imagem, redimensiona e retorna pixels RGB em array
+// Função que baixa a imagem, redimensiona e retorna pixels RGBA em array
 async function getImagePixels(url, width, height) {
   const response = await axios({
     url,
@@ -29,11 +29,11 @@ async function getImagePixels(url, width, height) {
 
   const resized = await sharp(imageBuffer)
     .resize(width, height)
-    .removeAlpha()
+    // removeAlpha removido para manter canal alpha
     .raw()
     .toBuffer()
 
-  const pixelsArray = Array.from(resized)
+  const pixelsArray = Array.from(resized) // Cada pixel tem 4 bytes: R, G, B, A
 
   return {
     width,
