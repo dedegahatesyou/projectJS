@@ -1,63 +1,60 @@
 const express = require('express');
+const cors = require('cors');
 const axios = require('axios');
 const sharp = require('sharp');
-const getImageData = require('get-image-data'); // from Velover's project
-const cors = require('cors');
+const { extractImageData } = require('image-data-extractor');
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-app.get('/getimages', async (req, res) => {
-	const tags = ((req.query.tags || '') + ' rating:safe').trim();
+app.get('/images', async (req, res) => {
+    try {
+        const tags = req.query.tags || 'rating:safe';
+        const url = `https://e621.net/posts.json?limit=10&tags=${encodeURIComponent(tags)}`;
+        const headers = {
+            'User-Agent': 'RobloxGame (by your_email@example.com)',
+        };
 
-	try {
-		const { data } = await axios.get('https://e621.net/posts.json', {
-			headers: { 'User-Agent': 'MyRobloxGame/1.0 (by you)' },
-			params: { tags, limit: 5 }
-		});
+        const response = await axios.get(url, { headers });
+        const posts = response.data.posts || [];
 
-		const results = [];
+        const imagesData = [];
 
-		for (const post of data.posts) {
-			const url = post.sample?.url || post.file?.url;
-			const ext = post.file?.ext;
+        for (const post of posts) {
+            const file = post.file;
+            if (!file || !file.url) continue;
 
-			if (!url || !ext) continue;
-			if (['mp4', 'webm', 'gif'].includes(ext)) continue;
+            // Skip .webm, .gif, .mp4
+            if (/\.(mp4|webm|gif)$/i.test(file.url)) continue;
 
-			try {
-				const imgResp = await axios.get(url, { responseType: 'arraybuffer' });
+            try {
+                const imageResponse = await axios.get(file.url, { responseType: 'arraybuffer' });
+                const resized = await sharp(imageResponse.data)
+                    .resize(64, 64, { fit: 'inside' }) // Ajuste para sua UI
+                    .toFormat('jpeg')
+                    .toBuffer();
 
-				// Resize and convert image to PNG in memory
-				const resizedBuffer = await sharp(imgResp.data)
-					.resize(128, 128)
-					.png()
-					.toBuffer();
+                const { width, height, data } = await extractImageData(resized);
 
-				// Use Velover's module to extract pixel data
-				const { data: pixelData, width, height } = await new Promise((resolve, reject) => {
-					getImageData(resizedBuffer, (err, imageData) => {
-						if (err) reject(err);
-						else resolve(imageData);
-					});
-				});
+                // Envia os dados como array numérico
+                imagesData.push({
+                    width,
+                    height,
+                    pixels: Array.from(data), // Uint8Array => number[]
+                });
+            } catch (imgErr) {
+                console.error('Erro ao processar imagem:', imgErr);
+            }
+        }
 
-				results.push({
-					width,
-					height,
-					data: Buffer.from(pixelData).toString('base64'),
-				});
-			} catch (err) {
-				console.warn("Erro ao processar imagem:", url, err.message);
-			}
-		}
-
-		res.json({ images: results });
-	} catch (err) {
-		console.error("Erro geral:", err.message);
-		res.status(500).json({ error: 'Image fetch failed' });
-	}
+        res.json(imagesData);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar imagens.' });
+    }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log("Server running in port", port));
+app.listen(PORT, () => {
+    console.log(`Servidor iniciado em http://localhost:${PORT}`);
+});
