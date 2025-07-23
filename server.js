@@ -1,9 +1,10 @@
 const express = require('express');
 const axios = require('axios');
 const sharp = require('sharp');
+const getImageData = require('get-image-data'); // from Velover's project
 const cors = require('cors');
-
 const app = express();
+
 app.use(cors());
 
 app.get('/getimages', async (req, res) => {
@@ -11,9 +12,7 @@ app.get('/getimages', async (req, res) => {
 
 	try {
 		const { data } = await axios.get('https://e621.net/posts.json', {
-			headers: {
-				'User-Agent': 'MyRobloxGame/1.0 (by you on e621)',
-			},
+			headers: { 'User-Agent': 'MyRobloxGame/1.0 (by you)' },
 			params: { tags, limit: 5 }
 		});
 
@@ -23,26 +22,33 @@ app.get('/getimages', async (req, res) => {
 			const url = post.sample?.url || post.file?.url;
 			const ext = post.file?.ext;
 
-			// Filter out mp4, webm, gif
 			if (!url || !ext) continue;
 			if (['mp4', 'webm', 'gif'].includes(ext)) continue;
 
 			try {
 				const imgResp = await axios.get(url, { responseType: 'arraybuffer' });
 
-				const buffer = await sharp(imgResp.data)
+				// Resize and convert image to PNG in memory
+				const resizedBuffer = await sharp(imgResp.data)
 					.resize(128, 128)
-					.jpeg({ quality: 80 })
-					.raw()
-					.toBuffer({ resolveWithObject: true });
+					.png()
+					.toBuffer();
+
+				// Use Velover's module to extract pixel data
+				const { data: pixelData, width, height } = await new Promise((resolve, reject) => {
+					getImageData(resizedBuffer, (err, imageData) => {
+						if (err) reject(err);
+						else resolve(imageData);
+					});
+				});
 
 				results.push({
-					width: buffer.info.width,
-					height: buffer.info.height,
-					data: Buffer.from(buffer.data).toString('base64')
+					width,
+					height,
+					data: Buffer.from(pixelData).toString('base64'),
 				});
-			} catch (imageErr) {
-				console.warn("Erro ao processar imagem:", url, imageErr.message);
+			} catch (err) {
+				console.warn("Erro ao processar imagem:", url, err.message);
 			}
 		}
 
@@ -54,4 +60,4 @@ app.get('/getimages', async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.listen(port, () => console.log("Server running in port", port));
