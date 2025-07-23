@@ -1,11 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { execFile } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const sharp = require('sharp'); // <-- new dependency
+const sharp = require('sharp');
 
 const app = express();
 app.use(cors());
@@ -40,49 +36,23 @@ app.post('/', async (req, res) => {
     const imageRes = await axios.get(file.url, { responseType: 'arraybuffer' });
     const imageBuffer = Buffer.from(imageRes.data);
 
-    const tempDir = os.tmpdir();
-    const inputJpgPath = path.join(tempDir, `input_${Date.now()}.jpg`);
-    const inputPngPath = path.join(tempDir, `input_${Date.now()}.png`);
-    const outputPath = path.join(tempDir, `output_${Date.now()}.txt`);
-
-    // Save original image temporarily as jpg (or original extension)
-    fs.writeFileSync(inputJpgPath, imageBuffer);
-
-    // Convert to PNG using sharp
-    await sharp(inputJpgPath)
+    // Convert image to PNG buffer in memory using sharp
+    const pngBuffer = await sharp(imageBuffer)
       .png()
-      .toFile(inputPngPath);
+      .toBuffer();
 
-    // Delete the original jpg to save space
-    fs.unlinkSync(inputJpgPath);
+    // Convert PNG buffer to base64 string
+    const base64String = pngBuffer.toString('base64');
 
-    const exePath = path.join(__dirname, 'Image-Data-Extractor', 'Image-Data-Extractor.exe');
-
-    execFile(exePath, [inputPngPath, outputPath], (error, stdout, stderr) => {
-      // Delete PNG input after extraction
-      fs.unlinkSync(inputPngPath);
-
-      if (error) {
-        console.error('Extractor error:', error.message);
-        return res.status(500).json({ error: 'Image processing failed' });
-      }
-
-      try {
-        const result = fs.readFileSync(outputPath, 'utf8').trim();
-        fs.unlinkSync(outputPath);
-
-        // Wrap in Roblox-ready Lua format
-        const wrapped = `return\n\t[[\n${result}\n\t]]`;
-
-        res.type('text/plain').send(wrapped);
-      } catch (readErr) {
-        console.error('Read error:', readErr.message);
-        res.status(500).json({ error: 'Failed to read output' });
-      }
+    // Return JSON with base64 PNG string
+    res.json({
+      tags,
+      page,
+      pngBase64: base64String
     });
 
   } catch (err) {
-    console.error('Error fetching image:', err.message);
+    console.error('Error fetching or processing image:', err.message);
     res.status(500).json({ error: 'Failed to fetch or process image' });
   }
 });
