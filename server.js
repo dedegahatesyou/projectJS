@@ -2,59 +2,59 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const sharp = require('sharp');
-const { extractImageData } = require('image-data-extractor');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
 app.get('/images', async (req, res) => {
-    try {
-        const tags = req.query.tags || 'rating:safe';
-        const url = `https://e621.net/posts.json?limit=10&tags=${encodeURIComponent(tags)}`;
-        const headers = {
-            'User-Agent': 'RobloxGame (by your_email@example.com)',
-        };
+  try {
+    const tags = req.query.tags;
+    const url = `https://e621.net/posts.json?limit=10&tags=${encodeURIComponent(tags)}`;
 
-        const response = await axios.get(url, { headers });
-        const posts = response.data.posts || [];
+    const headers = {
+      'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)',
+    };
 
-        const imagesData = [];
+    const response = await axios.get(url, { headers });
+    const posts = response.data.posts || [];
 
-        for (const post of posts) {
-            const file = post.file;
-            if (!file || !file.url) continue;
+    const imagesData = [];
 
-            // Skip .webm, .gif, .mp4
-            if (/\.(mp4|webm|gif)$/i.test(file.url)) continue;
+    for (const post of posts) {
+      const file = post.file;
+      if (!file || !file.url) continue;
 
-            try {
-                const imageResponse = await axios.get(file.url, { responseType: 'arraybuffer' });
-                const resized = await sharp(imageResponse.data)
-                    .resize(64, 64, { fit: 'inside' }) // Ajuste para sua UI
-                    .toFormat('jpeg')
-                    .toBuffer();
+      // Skip videos/gifs
+      if (/\.(mp4|webm|gif)$/i.test(file.url)) continue;
 
-                const { width, height, data } = await extractImageData(resized);
+      try {
+        const imageResponse = await axios.get(file.url, { responseType: 'arraybuffer' });
 
-                // Envia os dados como array numérico
-                imagesData.push({
-                    width,
-                    height,
-                    pixels: Array.from(data), // Uint8Array => number[]
-                });
-            } catch (imgErr) {
-                console.error('Erro ao processar imagem:', imgErr);
-            }
-        }
+        // Resize + get raw RGBA data
+        const { data, info } = await sharp(imageResponse.data)
+          .resize(64, 64, { fit: 'inside' })
+          .raw()
+          .toBuffer({ resolveWithObject: true });
 
-        res.json(imagesData);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Erro ao buscar imagens.' });
+        imagesData.push({
+          width: info.width,
+          height: info.height,
+          pixels: Array.from(data), // Uint8Array to Array
+        });
+      } catch (err) {
+        console.error('Failed to process image:', file.url, err.message);
+      }
     }
+
+    res.json(imagesData);
+  } catch (err) {
+    console.error('Error fetching e621 posts:', err.message);
+    res.status(500).json({ error: 'Failed to fetch images' });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor iniciado em http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
