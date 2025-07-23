@@ -5,6 +5,7 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const sharp = require('sharp'); // <-- new dependency
 
 const app = express();
 app.use(cors());
@@ -35,18 +36,31 @@ app.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or unsupported file' });
     }
 
+    // Download image as buffer
     const imageRes = await axios.get(file.url, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(imageRes.data);
 
     const tempDir = os.tmpdir();
-    const inputPath = path.join(tempDir, `input_${Date.now()}.jpg`);
+    const inputJpgPath = path.join(tempDir, `input_${Date.now()}.jpg`);
+    const inputPngPath = path.join(tempDir, `input_${Date.now()}.png`);
     const outputPath = path.join(tempDir, `output_${Date.now()}.txt`);
 
-    fs.writeFileSync(inputPath, imageRes.data);
+    // Save original image temporarily as jpg (or original extension)
+    fs.writeFileSync(inputJpgPath, imageBuffer);
+
+    // Convert to PNG using sharp
+    await sharp(inputJpgPath)
+      .png()
+      .toFile(inputPngPath);
+
+    // Delete the original jpg to save space
+    fs.unlinkSync(inputJpgPath);
 
     const exePath = path.join(__dirname, 'Image-Data-Extractor', 'Image-Data-Extractor.exe');
 
-    execFile(exePath, [inputPath, outputPath], (error, stdout, stderr) => {
-      fs.unlinkSync(inputPath); // delete input file
+    execFile(exePath, [inputPngPath, outputPath], (error, stdout, stderr) => {
+      // Delete PNG input after extraction
+      fs.unlinkSync(inputPngPath);
 
       if (error) {
         console.error('Extractor error:', error.message);
