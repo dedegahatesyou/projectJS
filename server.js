@@ -32,27 +32,26 @@ app.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or unsupported file' });
     }
 
-    // Download image as buffer
+    // Download original image buffer
     const imageRes = await axios.get(file.url, { responseType: 'arraybuffer' });
     const imageBuffer = Buffer.from(imageRes.data);
 
-    // Convert image to PNG buffer in memory using sharp
-    const pngBuffer = await sharp(imageBuffer)
-      .png()
-      .toBuffer();
+    // Convert to PNG buffer
+    const pngBuffer = await sharp(imageBuffer).png().toBuffer();
 
-    // Convert PNG buffer to base64 string
-    const base64String = pngBuffer.toString('base64');
+    // Convert PNG buffer to binary string (latin1 encoding)
+    const binaryString = pngBuffer.toString('latin1'); // 'binary' alias deprecated in Node.js
 
-    // Return JSON with base64 PNG string
+    // Encode binary string to base64
+    const base64String = Buffer.from(binaryString, 'latin1').toString('base64');
+
+    // Send back base64 in JSON
     res.json({
-      tags,
-      page,
       pngBase64: base64String
     });
 
   } catch (err) {
-    console.error('Error fetching or processing image:', err.message);
+    console.error('Error:', err.message);
     res.status(500).json({ error: 'Failed to fetch or process image' });
   }
 });
