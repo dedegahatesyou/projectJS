@@ -3,7 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const sharp = require('sharp');
 const zlib = require('zlib');
-const { encode } = require('@mattiasbuelens/qoi');
+const qoi = require('qoi');
 
 const app = express();
 app.use(cors());
@@ -44,15 +44,14 @@ app.post('/', async (req, res) => {
     const rawBuffer = await image.raw().toBuffer();
 
     // Encode raw RGBA buffer to QOI
-    const qoiBuffer = encode({
+    const qoiBuffer = qoi.encode({
       width,
       height,
       channels: 4,
-      colorspace: 0,
       data: rawBuffer
     });
 
-    // Compress QOI buffer with zlib.deflate (async)
+    // Compress QOI buffer with zlib.deflate
     zlib.deflate(qoiBuffer, (err, compressedBuffer) => {
       if (err) {
         console.error('Compression error:', err);
