@@ -14,32 +14,36 @@ app.post('/', async (req, res) => {
 
   try {
     const url = `https://e621.net/posts.json?limit=1&page=${page}&tags=${encodeURIComponent(tags)}`;
-    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
+    const headers = {
+      'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)'
+    };
 
     const response = await axios.get(url, { headers });
     const posts = response.data.posts || [];
 
     if (posts.length === 0) {
-      return res.status(404).send('-- no posts found --');
+      return res.status(404).json({ images: [] });
     }
 
     const post = posts[0];
     const fileUrl = post.file?.url;
 
     if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-      return res.status(400).send('-- unsupported file --');
+      return res.status(400).json({ images: [] });
     }
 
+    // Download image buffer
     const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const imageBuffer = Buffer.from(imageResponse.data);
 
-    const image = sharp(imageBuffer);
+    // Decode image to raw RGBA
+    const image = sharp(imageBuffer).ensureAlpha();
     const metadata = await image.metadata();
     const { width, height } = metadata;
 
     const rawBuffer = await image.raw().toBuffer();
 
-    // QOI encode
+    // Encode raw RGBA buffer to QOI
     const qoiBuffer = encode({
       width,
       height,
@@ -48,36 +52,31 @@ app.post('/', async (req, res) => {
       data: rawBuffer
     });
 
-    // Base64 encode QOI
-    const qoiBase64 = qoiBuffer.toString('base64');
-
-    // zlib deflate that base64
-    zlib.deflate(Buffer.from(qoiBase64), (err, compressed) => {
+    // Compress QOI buffer with zlib.deflate (async)
+    zlib.deflate(qoiBuffer, (err, compressedBuffer) => {
       if (err) {
         console.error('Compression error:', err);
-        return res.status(500).send('-- compression failed --');
+        return res.status(500).json({ images: [] });
       }
 
-      const finalBase64 = compressed.toString('base64');
+      // Encode compressed buffer to base64
+      const base64 = compressedBuffer.toString('base64');
 
-      const lua = `
-data = {
-  images = {
-    {
-      base64 = "${finalBase64}",
-      width = ${width},
-      height = ${height}
-    }
-  }
-}
-`.trim();
-
-      res.type('text/plain').send(lua);
+      // Respond with JSON
+      res.json({
+        images: [
+          {
+            base64,
+            width,
+            height
+          }
+        ]
+      });
     });
 
   } catch (err) {
-    console.error('Error:', err.message);
-    res.status(500).send('-- fetch/process failed --');
+    console.error('Server error:', err);
+    res.status(500).json({ images: [] });
   }
 });
 
