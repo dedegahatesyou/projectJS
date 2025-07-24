@@ -36,14 +36,11 @@ app.post('/', async (req, res) => {
       const pngBuffer = await sharp(imageRes.data).png().toBuffer();
       // Convert PNG buffer to base64 string
       const base64data = pngBuffer.toString('base64');
-      // Wrap base64 inside Lua multiline string brackets
-      const wrappedBase64 = `[[\n${base64data}\n]]`;
-
       // Push image info with wrapped base64, width, height
       const metadata = await sharp(pngBuffer).metadata();
 
       images.push({
-        base64: wrappedBase64,
+        base64: base64data,
         width: metadata.width,
         height: metadata.height
       });
