@@ -1,64 +1,56 @@
 const express = require("express");
-const fetch = require("node-fetch");
+const cors = require("cors");
+const axios = require("axios");
 const sharp = require("sharp");
 
 const app = express();
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
 
 app.post("/", async (req, res) => {
+  try {
     const { tags, page } = req.body;
+    const url = `https://e621.net/posts.json?tags=${encodeURIComponent(tags)}&page=${page || 1}&limit=3`;
 
-    try {
-        // Example endpoint: https://e621.net/posts.json?tags=example
-        const query = new URLSearchParams({
-            tags: tags || "",
-            page: page || "1",
-            limit: "3"
-        }).toString();
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "RobloxProxy/1.0 (by yourusername on e621)"
+      }
+    });
 
-        const response = await fetch(`https://e621.net/posts.json?${query}`, {
-            headers: {
-                "User-Agent": "MyRobloxBot/1.0 (by username on e621)"
-            }
-        });
+    const json = await response.json();
+    const posts = json.posts || [];
 
-        const data = await response.json();
-        const posts = data.posts || [];
+    const results = [];
 
-        const images = await Promise.all(posts.map(async (post) => {
-            try {
-                const fileUrl = post?.file?.url;
-                if (!fileUrl) return null;
+    for (const post of posts) {
+      if (!post.file || !post.file.url || !post.file.ext) continue;
 
-                const imgBuffer = await fetch(fileUrl).then(res => res.buffer());
+      const imageResponse = await axios.get(post.file.url, { responseType: "arraybuffer" });
 
-                // Convert to PNG and get base64 string
-                const pngBuffer = await sharp(imgBuffer).png().toBuffer();
-                const base64 = pngBuffer.toString("base64");
+      const pngBuffer = await sharp(imageResponse.data)
+        .resize({ width: 256 }) // optional
+        .png()
+        .toBuffer();
 
-                const { width, height } = await sharp(pngBuffer).metadata();
+      const base64 = pngBuffer.toString("base64");
 
-                return {
-                    base64,
-                    width,
-                    height
-                };
-            } catch (err) {
-                console.warn("Failed to process image:", err);
-                return null;
-            }
-        }));
-
-        const validImages = images.filter(Boolean);
-        res.json({ images: validImages });
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Failed to fetch or process images" });
+      results.push({
+        base64: base64,
+        width: post.file.width,
+        height: post.file.height,
+        id: post.id
+      });
     }
+
+    res.json({ images: results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Image server running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
