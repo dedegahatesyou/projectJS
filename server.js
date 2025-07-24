@@ -7,17 +7,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
 app.post('/', async (req, res) => {
   const { tags = 'rating:safe', page = 1 } = req.body;
 
   try {
-    // Fetch one image from e621 with the given tags and page
-    const url = `https://e621.net/posts.json?limit=1&page=${page}&tags=${encodeURIComponent(tags)}`;
-    const headers = {
-      'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)'
-    };
+    // Example: fetch multiple images (limit 3 here)
+    const url = `https://e621.net/posts.json?limit=3&page=${page}&tags=${encodeURIComponent(tags)}`;
+    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
     const response = await axios.get(url, { headers });
     const posts = response.data.posts || [];
@@ -26,41 +22,41 @@ app.post('/', async (req, res) => {
       return res.status(404).json({ error: 'No posts found' });
     }
 
-    const post = posts[0];
-    const file = post.file;
+    const images = [];
 
-    if (!file || !file.url || /\.(mp4|webm|gif)$/i.test(file.url)) {
-      return res.status(400).json({ error: 'Invalid or unsupported file' });
+    for (const post of posts) {
+      const file = post.file;
+      if (!file || !file.url || /\.(mp4|webm|gif)$/i.test(file.url)) {
+        continue; // skip unsupported files
+      }
+
+      // Fetch image as buffer
+      const imageRes = await axios.get(file.url, { responseType: 'arraybuffer' });
+      // Convert to PNG buffer using sharp
+      const pngBuffer = await sharp(imageRes.data).png().toBuffer();
+      // Convert PNG buffer to base64 string
+      const base64data = pngBuffer.toString('base64');
+      // Wrap base64 inside Lua multiline string brackets
+      const wrappedBase64 = `[[\n${base64data}\n]]`;
+
+      // Push image info with wrapped base64, width, height
+      const metadata = await sharp(pngBuffer).metadata();
+
+      images.push({
+        base64: wrappedBase64,
+        width: metadata.width,
+        height: metadata.height
+      });
     }
 
-    // Download the image as buffer
-    const imageRes = await axios.get(file.url, { responseType: 'arraybuffer' });
-    const inputBuffer = Buffer.from(imageRes.data);
-
-    // Convert to PNG raw pixels and encode as base64 (raw RGBA)
-    const rawBuffer = await sharp(inputBuffer)
-      .raw()
-      .toBuffer();
-
-    // Get image dimensions
-    const metadata = await sharp(inputBuffer).metadata();
-
-    // Encode raw pixels as base64 string
-    const base64RawPixels = rawBuffer.toString('base64');
-
-    // Wrap the base64 string as Lua multiline string with return
-    const luaResponse = `[[
-${base64RawPixels}
-]]`;
-
-    res.type('text/plain').send(luaResponse);
+    res.json({ images });
 
   } catch (err) {
-    console.error('Error fetching or processing image:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or process image' });
+    console.error('Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch or process images' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Server listening');
 });
