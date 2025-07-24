@@ -1,94 +1,83 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const sharp = require('sharp');
-const zlib = require('zlib');
-const fs = require('fs');
-const { execFile } = require('child_process');
-const path = require('path');
+const express = require("express");
+const axios = require("axios");
+const sharp = require("sharp");
+const qoijs = require("qoijs"); // npm install qoijs
+const bodyParser = require("body-parser");
 
 const app = express();
-app.use(cors());
+const PORT = process.env.PORT || 3000;
+
+app.use(bodyParser.json({ limit: "10mb" }));
 app.use(express.json());
 
-// Path to your QOI encoder executable
-const QOI_ENCODER_PATH = path.join(__dirname, 'qoi_encoder.exe');
+app.post("/", async (req, res) => {
+  const { tags, page } = req.body;
 
-app.post('/', async (req, res) => {
-  const { tags = 'rating:safe', page = 1 } = req.body;
+  if (!tags) {
+    return res.status(400).json({ error: "Missing tags" });
+  }
 
   try {
-    const url = `https://e621.net/posts.json?limit=1&page=${page}&tags=${encodeURIComponent(tags)}`;
-    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
+    const query = new URLSearchParams({
+      tags: tags,
+      page: page || "1",
+      limit: "3"
+    }).toString();
 
-    const response = await axios.get(url, { headers });
+    const url = `https://e621.net/posts.json?${query}`;
+    const response = await axios.get(url, {
+      headers: {
+        "User-Agent": "RobloxImageBridge/1.0 (by yourusername on e621)"
+      }
+    });
+
     const posts = response.data.posts || [];
 
-    if (posts.length === 0) {
-      return res.status(404).json({ error: 'No posts found' });
-    }
-
-    const post = posts[0];
-    const fileUrl = post.file?.url;
-
-    if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-      return res.status(400).json({ error: 'Invalid or unsupported file type' });
-    }
-
-    // Download image as buffer
-    const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-    const imageBuffer = Buffer.from(imageResponse.data);
-
-    // Use sharp to decode image and get width/height metadata
-    const image = sharp(imageBuffer);
-    const metadata = await image.metadata();
-
-    // Save PNG buffer temporarily
-    const tempPngPath = path.join(__dirname, 'temp.png');
-    await fs.promises.writeFile(tempPngPath, imageBuffer);
-
-    // Run the QOI encoder exe on the saved PNG
-    execFile(QOI_ENCODER_PATH, [tempPngPath], async (error, stdout, stderr) => {
+    // Process posts concurrently
+    const images = await Promise.all(posts.map(async (post) => {
       try {
-        // Delete temp PNG file
-        await fs.promises.unlink(tempPngPath);
-      } catch {}
-
-      if (error) {
-        console.error('QOI encoder error:', error, stderr);
-        return res.status(500).json({ error: 'QOI encoding failed' });
-      }
-
-      // stdout expected to be the QOI base64 string (no extra formatting)
-      const qoiBase64 = stdout.trim();
-
-      // Compress with zlib deflate
-      zlib.deflate(Buffer.from(qoiBase64, 'base64'), (err, compressedBuffer) => {
-        if (err) {
-          console.error('Compression error:', err);
-          return res.status(500).json({ error: 'Compression failed' });
+        const fileUrl = post?.file?.url;
+        if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
+          return null; // skip unsupported files
         }
 
-        const compressedBase64 = compressedBuffer.toString('base64');
+        // Download image data as buffer
+        const imgResponse = await axios.get(fileUrl, { responseType: "arraybuffer" });
+        const imgBuffer = Buffer.from(imgResponse.data);
 
-        // Return JSON with width, height and compressed base64 QOI data
-        res.json({
-          images: [
-            {
-              width: metadata.width,
-              height: metadata.height,
-              base64: compressedBase64,
-            },
-          ],
-        });
-      });
-    });
+        // Use sharp to decode and get raw RGBA pixels + metadata
+        const image = sharp(imgBuffer);
+        const { width, height } = await image.metadata();
+        const rawRGBA = await image.raw().toBuffer();
+
+        // Encode raw RGBA to QOI format (4 channels)
+        const qoiBuffer = qoijs.encode(rawRGBA, width, height, 4);
+
+        // Convert QOI buffer to base64 string
+        const qoiBase64 = qoiBuffer.toString("base64");
+
+        return {
+          base64: qoiBase64,
+          width,
+          height
+        };
+      } catch (err) {
+        console.warn("Failed to process image:", err.message);
+        return null;
+      }
+    }));
+
+    // Filter out nulls from failed images
+    const validImages = images.filter(Boolean);
+
+    return res.json({ images: validImages });
+
   } catch (err) {
-    console.error('Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or process image' });
+    console.error("Failed to fetch or process images:", err.message);
+    return res.status(500).json({ error: "Failed to fetch or process images" });
   }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Server running');
+app.listen(PORT, () => {
+  console.log(`Image server running on port ${PORT}`);
 });
