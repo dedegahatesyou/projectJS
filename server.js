@@ -10,71 +10,59 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(express.json());
 
-app.post("/", async (req, res) => {
-  const { tags, page } = req.body;
-
-  if (!tags) {
-    return res.status(400).json({ error: "Missing tags" });
-  }
+app.post('/', async (req, res) => {
+  const { tags = 'rating:safe', page = 1 } = req.body;
 
   try {
-    const query = new URLSearchParams({
-      tags: tags,
-      page: page || "1",
-      limit: "3"
-    }).toString();
+    const url = `https://e621.net/posts.json?limit=3&page=${page}&tags=${encodeURIComponent(tags)}`;
+    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
-    const url = `https://e621.net/posts.json?${query}`;
-    const response = await axios.get(url, {
-      headers: {
-        "User-Agent": "RobloxImageBridge/1.0 (by yourusername on e621)"
-      }
-    });
-
+    const response = await axios.get(url, { headers });
     const posts = response.data.posts || [];
 
-    // Process posts concurrently
-    const images = await Promise.all(posts.map(async (post) => {
-      try {
-        const fileUrl = post?.file?.url;
-        if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-          return null; // skip unsupported files
-        }
+    if (posts.length === 0) {
+      console.log('No posts found for tags:', tags);
+      return res.status(404).json({ error: 'No posts found' });
+    }
 
-        // Download image data as buffer
-        const imgResponse = await axios.get(fileUrl, { responseType: "arraybuffer" });
-        const imgBuffer = Buffer.from(imgResponse.data);
+    const images = [];
 
-        // Use sharp to decode and get raw RGBA pixels + metadata
-        const image = sharp(imgBuffer);
-        const { width, height } = await image.metadata();
-        const rawRGBA = await image.raw().toBuffer();
-
-        // Encode raw RGBA to QOI format (4 channels)
-        const qoiBuffer = qoijs.encode(rawRGBA, width, height, 4);
-
-        // Convert QOI buffer to base64 string
-        const qoiBase64 = qoiBuffer.toString("base64");
-
-        return {
-          base64: qoiBase64,
-          width,
-          height
-        };
-      } catch (err) {
-        console.warn("Failed to process image:", err.message);
-        return null;
+    for (const post of posts) {
+      const fileUrl = post.file?.url;
+      if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
+        console.log('Skipping unsupported file:', fileUrl);
+        continue;
       }
-    }));
 
-    // Filter out nulls from failed images
-    const validImages = images.filter(Boolean);
+      try {
+        // Download image buffer
+        const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+        const imageBuffer = Buffer.from(imageResponse.data);
 
-    return res.json({ images: validImages });
+        // Convert to PNG and get base64
+        const pngBuffer = await sharp(imageBuffer).png().toBuffer();
+        const metadata = await sharp(pngBuffer).metadata();
+        const base64 = pngBuffer.toString('base64');
+
+        images.push({
+          base64,
+          width: metadata.width,
+          height: metadata.height
+        });
+
+        console.log(`Processed image: ${fileUrl} (Width: ${metadata.width}, Height: ${metadata.height})`);
+
+      } catch (imgErr) {
+        console.warn('Failed to process image:', fileUrl, imgErr.message);
+      }
+    }
+
+    console.log(`Total images processed: ${images.length}`);
+    res.json({ images });
 
   } catch (err) {
-    console.error("Failed to fetch or process images:", err.message);
-    return res.status(500).json({ error: "Failed to fetch or process images" });
+    console.error('Error fetching posts:', err.message);
+    res.status(500).json({ error: 'Failed to fetch or process images' });
   }
 });
 
