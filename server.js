@@ -50,11 +50,14 @@ app.post('/', async (req, res) => {
 
       // Return JSON with width, height and pixelBase64 string (no Lua wrapper here)
       res.json({
-        width: metadata.width,
-        height: metadata.height,
-        base64: base64
+        images: [
+          {
+            width: metadata.width,
+            height: metadata.height,
+            base64: base64
+          }
+        ]
       });
-    });
 
   } catch (err) {
     console.error('Error:', err.message);
