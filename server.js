@@ -19,49 +19,49 @@ app.post('/', async (req, res) => {
     const posts = response.data.posts || [];
 
     if (posts.length === 0) {
-      return res.status(404).json({ error: 'No posts found' });
+      return res.status(404).send('-- no posts found --');
     }
 
     const post = posts[0];
     const fileUrl = post.file?.url;
 
     if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-      return res.status(400).json({ error: 'Invalid or unsupported file type' });
+      return res.status(400).send('-- unsupported file --');
     }
 
-    // Download image as buffer
     const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const imageBuffer = Buffer.from(imageResponse.data);
 
-    // Use sharp to decode and extract raw RGBA pixels
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
+    const raw = await image.raw().toBuffer();
 
-    const raw = await image.raw().toBuffer(); // raw RGBA buffer
-
-    // Compress raw pixel buffer using zlib deflate
     zlib.deflate(raw, (err, compressedBuffer) => {
       if (err) {
         console.error('Compression error:', err);
-        return res.status(500).json({ error: 'Compression failed' });
+        return res.status(500).send('-- compression failed --');
       }
 
       const base64 = compressedBuffer.toString('base64');
 
-      // Return JSON with width, height and pixelBase64 string (no Lua wrapper here)
-      res.json({
-        images: [
-          {
-            width: metadata.width,
-            height: metadata.height,
-            base64: base64
-          }
-        ]
-      });
+      const luaTable = `
+data = {
+  images = {
+    {
+      base64 = "${base64}",
+      width = ${metadata.width},
+      height = ${metadata.height}
+    }
+  }
+}
+`.trim();
+
+      res.type('text/plain').send(luaTable);
+    });
 
   } catch (err) {
     console.error('Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or process image' });
+    res.status(500).send('-- fetch/process failed --');
   }
 });
 
