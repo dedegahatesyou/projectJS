@@ -3,6 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const sharp = require('sharp');
 const zlib = require('zlib');
+const { encode } = require('@mattiasbuelens/qoi');
 
 const app = express();
 app.use(cors());
@@ -34,29 +35,44 @@ app.post('/', async (req, res) => {
 
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
-    const raw = await image.raw().toBuffer();
+    const { width, height } = metadata;
 
-    zlib.deflate(raw, (err, compressedBuffer) => {
+    const rawBuffer = await image.raw().toBuffer();
+
+    // QOI encode
+    const qoiBuffer = encode({
+      width,
+      height,
+      channels: 4,
+      colorspace: 0,
+      data: rawBuffer
+    });
+
+    // Base64 encode QOI
+    const qoiBase64 = qoiBuffer.toString('base64');
+
+    // zlib deflate that base64
+    zlib.deflate(Buffer.from(qoiBase64), (err, compressed) => {
       if (err) {
         console.error('Compression error:', err);
         return res.status(500).send('-- compression failed --');
       }
 
-      const base64 = compressedBuffer.toString('base64');
+      const finalBase64 = compressed.toString('base64');
 
-      const luaTable = `
+      const lua = `
 data = {
   images = {
     {
-      base64 = "${base64}",
-      width = ${metadata.width},
-      height = ${metadata.height}
+      base64 = "${finalBase64}",
+      width = ${width},
+      height = ${height}
     }
   }
 }
 `.trim();
 
-      res.type('text/plain').send(luaTable);
+      res.type('text/plain').send(lua);
     });
 
   } catch (err) {
