@@ -52,7 +52,7 @@ app.post('/', async (req, res) => {
       res.json({
         width: metadata.width,
         height: metadata.height,
-        pixelBase64: base64
+        base64: base64
       });
     });
 
