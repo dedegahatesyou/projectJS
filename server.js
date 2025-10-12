@@ -9,61 +9,73 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(express.json());
 
-app.post('/', async (req, res) => {
+let cachedPosts = [];
+let currentIndex = 0;
+
+app.post('/fetch-posts', async (req, res) => {
   const { tags = 'rating:safe', page = 1 } = req.body;
 
   try {
-    const url = `https://e621.net/posts.json?limit=3&page=${page}&tags=${encodeURIComponent(tags)}`;
+    const url = `https://e621.net/posts.json?limit=30&page=${page}&tags=${encodeURIComponent(tags)}`;
     const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
     const response = await axios.get(url, { headers });
-    const posts = response.data.posts || [];
+    cachedPosts = response.data.posts || [];
+    currentIndex = 0;
 
-    if (posts.length === 0) {
+    if (cachedPosts.length === 0) {
       console.log('No posts found for tags:', tags);
-      return res.status(404).json({ error: 'No posts found' });
+      return res.status(404).json({ error: 'No posts found', count: 0 });
     }
 
-    const images = [];
-
-    for (const post of posts) {
-      const fileUrl = post.file?.url;
-      if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-        console.log('Skipping unsupported file:', fileUrl);
-        continue;
-      }
-
-      try {
-        const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-        const imageBuffer = Buffer.from(imageResponse.data);
-
-        const resizedBuffer = await sharp(imageBuffer)
-          .resize(1024, 1024)
-          .ensureAlpha()
-          .raw()
-          .toBuffer({ resolveWithObject: true });
-
-        const pixelData = resizedBuffer.data.toString('base64');
-
-        images.push({
-          pixelData,
-          width: 256,
-          height: 256
-        });
-
-        console.log(`Processed image: ${fileUrl}`);
-
-      } catch (imgErr) {
-        console.warn('Failed to process image:', fileUrl, imgErr.message);
-      }
-    }
-
-    console.log(`Total images processed: ${images.length}`);
-    res.json({ images });
+    console.log(`Fetched ${cachedPosts.length} posts`);
+    res.json({ success: true, count: cachedPosts.length });
 
   } catch (err) {
     console.error('Error fetching posts:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or process images' });
+    res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+app.post('/get-next-image', async (req, res) => {
+  if (currentIndex >= cachedPosts.length) {
+    return res.json({ success: false, message: 'No more images' });
+  }
+
+  const post = cachedPosts[currentIndex];
+  const fileUrl = post.file?.url;
+
+  if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
+    currentIndex++;
+    return res.json({ success: false, message: 'Unsupported file type' });
+  }
+
+  try {
+    const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(imageResponse.data);
+
+    const resizedBuffer = await sharp(imageBuffer)
+      .resize(256, 256)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const pixelData = resizedBuffer.data.toString('base64');
+
+    currentIndex++;
+
+    res.json({
+      success: true,
+      pixelData,
+      width: 256,
+      height: 256,
+      remaining: cachedPosts.length - currentIndex
+    });
+
+  } catch (err) {
+    console.warn('Failed to process image:', fileUrl, err.message);
+    currentIndex++;
+    return res.json({ success: false, message: 'Failed to process image' });
   }
 });
 
