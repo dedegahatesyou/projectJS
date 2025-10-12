@@ -40,14 +40,12 @@ app.post('/', async (req, res) => {
         const imageBuffer = Buffer.from(imageResponse.data);
 
         const resizedBuffer = await sharp(imageBuffer).resize(256, 256).raw().toBuffer({ resolveWithObject: true });
-        const metadata = resizedBuffer.info;
-        const rgbaBuffer = await sharp(imageBuffer).resize(256, 256).toFormat('rgba').raw().toBuffer({ resolveWithObject: true });
-        const pixelData = rgbaBuffer.data.toString('base64');
+        const pixelData = resizedBuffer.data.toString('base64');
         
         images.push({
           pixelData,
-          width: metadata.width,
-          height: metadata.height
+          width: resizedBuffer.info.width,
+          height: resizedBuffer.info.height
         });
 
         console.log(`Processed image: ${fileUrl} (Width: ${metadata.width}, Height: ${metadata.height})`);
