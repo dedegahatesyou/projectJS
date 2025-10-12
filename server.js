@@ -39,13 +39,12 @@ app.post('/', async (req, res) => {
         const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
         const imageBuffer = Buffer.from(imageResponse.data);
 
-        // Convert to PNG and get base64
-        const pngBuffer = await sharp(imageBuffer).png().toBuffer();
-        const metadata = await sharp(pngBuffer).metadata();
-        const base64 = pngBuffer.toString('base64');
-
+        const resizedBuffer = await sharp(imageBuffer).resize(256, 256).raw().toBuffer({ resolveWithObject: true });
+        const metadata = resizedBuffer.info;
+        const pixelData = resizedBuffer.data.toString('base64');
+        
         images.push({
-          base64,
+          pixelData,
           width: metadata.width,
           height: metadata.height
         });
