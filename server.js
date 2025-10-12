@@ -13,10 +13,13 @@ let cachedPosts = [];
 let currentIndex = 0;
 
 app.post('/fetch-posts', async (req, res) => {
-  const { tags = 'rating:safe', page = 1 } = req.body;
+  const { tags = 'rating:safe', page = 1, limit = 10 } = req.body;
+  
+  const maxLimit =320;
+  const validLimit = Math.min(Math.max(parseInt(limit) || 10, 1), maxLimit);
 
   try {
-    const url = `https://e621.net/posts.json?limit=30&page=${page}&tags=${encodeURIComponent(tags)}`;
+    const url = `https://e621.net/posts.json?limit=${limit}&page=${page}&tags=${encodeURIComponent(tags)}`;
     const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
     const response = await axios.get(url, { headers });
