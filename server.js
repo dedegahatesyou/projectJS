@@ -38,7 +38,7 @@ app.post('/', async (req, res) => {
         const imageBuffer = Buffer.from(imageResponse.data);
 
         const resizedBuffer = await sharp(imageBuffer)
-          .resize(256, 256)
+          .resize(1024, 1024)
           .ensureAlpha()
           .raw()
           .toBuffer({ resolveWithObject: true });
