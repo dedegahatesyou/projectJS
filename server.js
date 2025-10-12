@@ -39,20 +39,19 @@ app.post('/', async (req, res) => {
 
         const resizedBuffer = await sharp(imageBuffer)
           .resize(256, 256)
+          .ensureAlpha()
           .raw()
           .toBuffer({ resolveWithObject: true });
 
         const pixelData = resizedBuffer.data.toString('base64');
-        const width = resizedBuffer.info.width;
-        const height = resizedBuffer.info.height;
 
         images.push({
           pixelData,
-          width,
-          height
+          width: 256,
+          height: 256
         });
 
-        console.log(`Processed image: ${fileUrl} (Width: ${width}, Height: ${height})`);
+        console.log(`Processed image: ${fileUrl}`);
 
       } catch (imgErr) {
         console.warn('Failed to process image:', fileUrl, imgErr.message);
