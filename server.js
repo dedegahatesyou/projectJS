@@ -55,7 +55,7 @@ app.post('/get-next-image', async (req, res) => {
     const imageBuffer = Buffer.from(imageResponse.data);
 
     const resizedBuffer = await sharp(imageBuffer)
-      .resize(256, 256)
+      .resize(512, 512)
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
