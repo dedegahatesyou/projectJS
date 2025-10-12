@@ -1,7 +1,6 @@
 const express = require("express");
 const axios = require("axios");
 const sharp = require("sharp");
-const qoijs = require("qoijs"); // npm install qoijs
 const bodyParser = require("body-parser");
 
 const app = express();
@@ -35,20 +34,25 @@ app.post('/', async (req, res) => {
       }
 
       try {
-        // Download image buffer
         const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
         const imageBuffer = Buffer.from(imageResponse.data);
 
-        const resizedBuffer = await sharp(imageBuffer).resize(256, 256).raw().toBuffer({ resolveWithObject: true });
+        const resizedBuffer = await sharp(imageBuffer)
+          .resize(256, 256)
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+
         const pixelData = resizedBuffer.data.toString('base64');
-        
+        const width = resizedBuffer.info.width;
+        const height = resizedBuffer.info.height;
+
         images.push({
           pixelData,
-          width: resizedBuffer.info.width,
-          height: resizedBuffer.info.height
+          width,
+          height
         });
 
-        console.log(`Processed image: ${fileUrl} (Width: ${metadata.width}, Height: ${metadata.height})`);
+        console.log(`Processed image: ${fileUrl} (Width: ${width}, Height: ${height})`);
 
       } catch (imgErr) {
         console.warn('Failed to process image:', fileUrl, imgErr.message);
