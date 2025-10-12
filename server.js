@@ -41,7 +41,8 @@ app.post('/', async (req, res) => {
 
         const resizedBuffer = await sharp(imageBuffer).resize(256, 256).raw().toBuffer({ resolveWithObject: true });
         const metadata = resizedBuffer.info;
-        const pixelData = resizedBuffer.data.toString('base64');
+        const rgbaBuffer = await sharp(imageBuffer).resize(256, 256).toFormat('rgba').raw().toBuffer({ resolveWithObject: true });
+        const pixelData = rgbaBuffer.data.toString('base64');
         
         images.push({
           pixelData,
