@@ -85,6 +85,8 @@ app.post('/get-next-image', async (req, res) => {
       height: 256,
       originalWidth: originalWidth,
       originalHeight: originalHeight,
+      rating: post.rating,
+      postId: post.id,
       remaining: cachedPosts.length - currentIndex
     });
 
