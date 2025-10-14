@@ -13,7 +13,7 @@ let cachedPosts = [];
 let currentIndex = 0;
 
 app.post('/fetch-posts', async (req, res) => {
-  const { tags = 'order:hot', page = 1, limit = 30 } = req.body;
+  const { tags = 'rating:safe', page = 1, limit = 30 } = req.body;
   
   const maxLimit = 320;
   const validLimit = Math.min(Math.max(parseInt(limit) || 30, 1), maxLimit);
@@ -41,17 +41,23 @@ app.post('/fetch-posts', async (req, res) => {
 });
 
 app.post('/get-next-image', async (req, res) => {
+  // Skip videos/gifs and find the next valid image
+  while (currentIndex < cachedPosts.length) {
+    const post = cachedPosts[currentIndex];
+    const fileUrl = post.file?.url;
+
+    if (fileUrl && !/\.(mp4|webm|gif)$/i.test(fileUrl)) {
+      break; // Found a valid image
+    }
+    currentIndex++;
+  }
+
   if (currentIndex >= cachedPosts.length) {
     return res.json({ success: false, message: 'No more images' });
   }
 
   const post = cachedPosts[currentIndex];
   const fileUrl = post.file?.url;
-
-  if (!fileUrl || /\.(mp4|webm|gif)$/i.test(fileUrl)) {
-    currentIndex++;
-    return res.json({ success: false, message: 'Unsupported file type' });
-  }
 
   try {
     const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
