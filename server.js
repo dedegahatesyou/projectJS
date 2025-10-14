@@ -87,6 +87,9 @@ app.post('/get-next-image', async (req, res) => {
       originalHeight: originalHeight,
       rating: post.rating,
       postId: post.id,
+      score: post.score?.total || 0,
+      favorites: post.fav_count || 0,
+      comments: post.comment_count || 0,
       remaining: cachedPosts.length - currentIndex
     });
 
