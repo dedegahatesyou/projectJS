@@ -13,13 +13,13 @@ let cachedPosts = [];
 let currentIndex = 0;
 
 app.post('/fetch-posts', async (req, res) => {
-  const { tags = 'rating:safe', page = 1, limit = 10 } = req.body;
+  const { tags = 'order:hot', page = 1, limit = 30 } = req.body;
   
-  const maxLimit =320;
-  const validLimit = Math.min(Math.max(parseInt(limit) || 10, 1), maxLimit);
+  const maxLimit = 320;
+  const validLimit = Math.min(Math.max(parseInt(limit) || 30, 1), maxLimit);
 
   try {
-    const url = `https://e621.net/posts.json?limit=${limit}&page=${page}&tags=${encodeURIComponent(tags)}`;
+    const url = `https://e621.net/posts.json?limit=${validLimit}&page=${page}&tags=${encodeURIComponent(tags)}`;
     const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
     const response = await axios.get(url, { headers });
@@ -57,6 +57,11 @@ app.post('/get-next-image', async (req, res) => {
     const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const imageBuffer = Buffer.from(imageResponse.data);
 
+    // Get original image metadata
+    const metadata = await sharp(imageBuffer).metadata();
+    const originalWidth = metadata.width;
+    const originalHeight = metadata.height;
+
     const resizedBuffer = await sharp(imageBuffer)
       .resize(512, 512)
       .ensureAlpha()
@@ -72,6 +77,8 @@ app.post('/get-next-image', async (req, res) => {
       pixelData,
       width: 256,
       height: 256,
+      originalWidth: originalWidth,
+      originalHeight: originalHeight,
       remaining: cachedPosts.length - currentIndex
     });
 
