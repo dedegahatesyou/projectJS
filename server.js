@@ -13,7 +13,7 @@ let cachedPosts = [];
 let currentIndex = 0;
 
 app.post('/fetch-posts', async (req, res) => {
-  const { tags = 'order:hot', page = 1, limit = 30 } = req.body;
+  const { tags = 'rating:safe', page = 1, limit = 30 } = req.body;
   
   const maxLimit = 320;
   const validLimit = Math.min(Math.max(parseInt(limit) || 30, 1), maxLimit);
