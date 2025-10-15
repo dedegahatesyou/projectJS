@@ -40,6 +40,34 @@ app.post('/fetch-posts', async (req, res) => {
   }
 });
 
+app.post('/autocomplete-tags', async (req, res) => {
+  const { query = '' } = req.body;
+
+  if (!query || query.trim().length === 0) {
+    return res.json({ success: true, suggestions: [] });
+  }
+
+  try {
+    const url = `https://e621.net/tags/autocomplete.json?search[name_matches]=${encodeURIComponent(query)}*`;
+    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
+
+    const response = await axios.get(url, { headers });
+    const tags = response.data || [];
+
+    const suggestions = tags.slice(0, 10).map(tag => ({
+      name: tag.name,
+      postCount: tag.post_count || 0,
+      category: tag.category || 0
+    }));
+
+    res.json({ success: true, suggestions });
+
+  } catch (err) {
+    console.error('Error fetching autocomplete:', err.message);
+    res.status(500).json({ error: 'Failed to fetch autocomplete suggestions' });
+  }
+});
+
 app.post('/get-next-image', async (req, res) => {
   // Skip videos/gifs and find the next valid image
   while (currentIndex < cachedPosts.length) {
@@ -97,6 +125,34 @@ app.post('/get-next-image', async (req, res) => {
     console.warn('Failed to process image:', fileUrl, err.message);
     currentIndex++;
     return res.json({ success: false, message: 'Failed to process image' });
+  }
+});
+
+app.post('/autocomplete-tags', async (req, res) => {
+  const { query = '' } = req.body;
+
+  if (!query || query.trim().length === 0) {
+    return res.json({ success: true, suggestions: [] });
+  }
+
+  try {
+    const url = `https://e621.net/tags/autocomplete.json?search[name_matches]=${encodeURIComponent(query)}*`;
+    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
+
+    const response = await axios.get(url, { headers });
+    const tags = response.data || [];
+
+    const suggestions = tags.slice(0, 10).map(tag => ({
+      name: tag.name,
+      postCount: tag.post_count || 0,
+      category: tag.category || 0
+    }));
+
+    res.json({ success: true, suggestions });
+
+  } catch (err) {
+    console.error('Error fetching autocomplete:', err.message);
+    res.status(500).json({ error: 'Failed to fetch autocomplete suggestions' });
   }
 });
 
