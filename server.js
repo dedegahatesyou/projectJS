@@ -91,7 +91,12 @@ app.post('/get-next-image', async (req, res) => {
   }
 
   const post = cachedPosts[currentIndex];
-  const fileUrl = post.file?.url;
+  const fileUrl = post.sample?.url || post.file?.url;
+
+  if (!fileUrl) {
+    currentIndex++;
+    return res.json({ success: false, message: 'No file URL available' });
+  }
 
   try {
     const imageResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
@@ -119,6 +124,8 @@ app.post('/get-next-image', async (req, res) => {
       height: 256,
       originalWidth: originalWidth,
       originalHeight: originalHeight,
+      sampleWidth: post.sample?.width || originalWidth,
+      sampleHeight: post.sample?.height || originalHeight,
       rating: post.rating,
       postId: post.id,
       score: post.score?.total || 0,
