@@ -48,9 +48,14 @@ app.post('/autocomplete-tags', async (req, res) => {
   }
 
   try {
-    const url = `https://e621.net/tags/autocomplete.json?search[name_matches]=${encodeURIComponent(query)}*`;
+    // Clean the query - remove special characters that might cause issues
+    const cleanQuery = query.trim().replace(/[^\w\s-_]/g, '');
+    
+    const url = `https://e621.net/tags/autocomplete.json?search[name_matches]=${encodeURIComponent(cleanQuery)}*`;
     const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
 
+    console.log('Autocomplete request for:', cleanQuery);
+    
     const response = await axios.get(url, { headers });
     const tags = response.data || [];
 
@@ -64,7 +69,8 @@ app.post('/autocomplete-tags', async (req, res) => {
 
   } catch (err) {
     console.error('Error fetching autocomplete:', err.message);
-    res.status(500).json({ error: 'Failed to fetch autocomplete suggestions' });
+    console.error('Query was:', query);
+    res.status(500).json({ error: 'Failed to fetch autocomplete suggestions', details: err.message });
   }
 });
 
