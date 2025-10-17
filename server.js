@@ -107,9 +107,9 @@ app.post('/get-next-image', async (req, res) => {
     const originalWidth = metadata.width;
     const originalHeight = metadata.height;
 
-    // Resize to 1024x1024 with optimizations for Roblox
+    // Resize to 512x512 with optimizations for Roblox
     const resizedBuffer = await sharp(imageBuffer)
-      .resize(1024, 1024, {
+      .resize(512, 512, {
         fit: 'contain',
         background: { r: 0, g: 0, b: 0, alpha: 0 }
       })
@@ -143,34 +143,6 @@ app.post('/get-next-image', async (req, res) => {
     console.warn('Failed to process image:', fileUrl, err.message);
     currentIndex++;
     return res.json({ success: false, message: 'Failed to process image' });
-  }
-});
-
-app.post('/autocomplete-tags', async (req, res) => {
-  const { query = '' } = req.body;
-
-  if (!query || query.trim().length === 0) {
-    return res.json({ success: true, suggestions: [] });
-  }
-
-  try {
-    const url = `https://e621.net/tags/autocomplete.json?search[name_matches]=${encodeURIComponent(query)}*`;
-    const headers = { 'User-Agent': 'RobloxGame/1.0 (by your_email@example.com)' };
-
-    const response = await axios.get(url, { headers });
-    const tags = response.data || [];
-
-    const suggestions = tags.slice(0, 10).map(tag => ({
-      name: tag.name,
-      postCount: tag.post_count || 0,
-      category: tag.category || 0
-    }));
-
-    res.json({ success: true, suggestions });
-
-  } catch (err) {
-    console.error('Error fetching autocomplete:', err.message);
-    res.status(500).json({ error: 'Failed to fetch autocomplete suggestions' });
   }
 });
 
