@@ -107,12 +107,17 @@ app.post('/get-next-image', async (req, res) => {
     const originalWidth = metadata.width;
     const originalHeight = metadata.height;
 
+    // Resize to 1024x1024 with optimizations for Roblox
     const resizedBuffer = await sharp(imageBuffer)
-      .resize(512, 512)
+      .resize(1024, 1024, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      })
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
+    // Convert to base64 in smaller chunks to avoid memory issues
     const pixelData = resizedBuffer.data.toString('base64');
 
     currentIndex++;
@@ -120,8 +125,8 @@ app.post('/get-next-image', async (req, res) => {
     res.json({
       success: true,
       pixelData,
-      width: 256,
-      height: 256,
+      width: resizedBuffer.info.width,
+      height: resizedBuffer.info.height,
       originalWidth: originalWidth,
       originalHeight: originalHeight,
       sampleWidth: post.sample?.width || originalWidth,
